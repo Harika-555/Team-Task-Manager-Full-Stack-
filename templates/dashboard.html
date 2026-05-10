@@ -98,7 +98,9 @@
                     </div>
                     <div class="project-meta">
                         <span>{{ project["current_user_role"] }}</span>
-                        <span>{{ project["done_count"] or 0 }}/{{ project["task_count"] }} done</span>
+                        {% if project["current_user_role"] == "Admin" %}
+                            <span>{{ project["done_count"] or 0 }}/{{ project["task_count"] }} done</span>
+                        {% endif %}
                     </div>
                 </a>
             {% endfor %}

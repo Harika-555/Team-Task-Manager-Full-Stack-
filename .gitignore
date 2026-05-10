@@ -4,5 +4,4 @@ instance/
 .env
 venv/
 .venv/
-INTERVIEW_NOTES.md
-README.txt
+

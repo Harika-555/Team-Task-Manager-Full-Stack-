@@ -63,6 +63,7 @@ def init_db() -> None:
             created_by INTEGER NOT NULL,
             status TEXT NOT NULL CHECK(status IN ('To Do', 'In Progress', 'Done')),
             priority TEXT NOT NULL CHECK(priority IN ('Low', 'Medium', 'High')),
+            aht_minutes INTEGER NOT NULL DEFAULT 0,
             due_date TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
@@ -71,4 +72,12 @@ def init_db() -> None:
         );
         """
     )
+    ensure_column(db, "tasks", "aht_minutes", "INTEGER NOT NULL DEFAULT 0")
     db.commit()
+
+
+def ensure_column(db: sqlite3.Connection, table_name: str, column_name: str, definition: str) -> None:
+    columns = db.execute(f"PRAGMA table_info({table_name})").fetchall()
+    if any(column["name"] == column_name for column in columns):
+        return
+    db.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {definition}")

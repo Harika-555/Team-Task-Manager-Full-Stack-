@@ -8,7 +8,8 @@ Team Task Manager is a full-stack Flask web application for creating projects, m
 - Project creation and project dashboard
 - Team member management
 - Role-based access control
-- Task creation, assignment, priority, due date, and status tracking
+- Task creation, bulk assignment, priority, due date, and status tracking
+- AHT-based task update control for members
 - Dashboard metrics for projects, assigned tasks, in-progress tasks, and overdue tasks
 - SQLite database with table relationships
 - JSON API endpoints for projects and tasks
@@ -49,12 +50,13 @@ The application uses four main tables:
 - `users`: stores registered users and hashed passwords.
 - `projects`: stores project information and the project owner.
 - `project_members`: connects users to projects and stores each user's role.
-- `tasks`: stores task details such as title, assignee, creator, status, priority, and due date.
+- `tasks`: stores task details such as title, assignee, creator, status, priority, AHT minutes, and due date.
 
 ## Role-Based Access
 
-- Admin users can create projects, add members, create tasks, and assign tasks.
+- Admin users can create projects, add members, create tasks, and assign one task to multiple members at once.
 - Member users can view project tasks and update tasks assigned to them.
+- Member task updates are enabled only after the task's AHT time is completed.
 - Admin users can update any task inside their project.
 - Users cannot view projects where they are not a member.
 - A user can belong to only one project team, so the same user cannot be added to multiple teams with different roles.
@@ -114,6 +116,6 @@ http://127.0.0.1:5000
 2. Create a project as User A.
 3. Log out and sign up as User B.
 4. Log in as User A and add User B to the project using User B's email.
-5. Create a task and assign it to User B.
+5. Create a task, set AHT minutes, and assign it to one or more members using the assignee multi-select.
 6. Log in as User B and update the task status.
 7. Open the dashboard to show task count, in-progress count, and overdue count.

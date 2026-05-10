@@ -19,6 +19,7 @@ TASK_PRIORITIES = ("Low", "Medium", "High")
 MAX_NAME_LENGTH = 80
 MAX_TITLE_LENGTH = 120
 MAX_DESCRIPTION_LENGTH = 500
+MAX_AHT_MINUTES = 1440
 
 
 def create_database_if_needed() -> None:
@@ -72,6 +73,20 @@ def project_members(project_id: int):
     ).fetchall()
 
 
+def assignable_members(project_id: int, current_user_id: int):
+    db = get_db()
+    return db.execute(
+        """
+        SELECT u.id, u.name, u.email, pm.role
+        FROM project_members pm
+        JOIN users u ON u.id = pm.user_id
+        WHERE pm.project_id = ? AND u.id != ?
+        ORDER BY u.name
+        """,
+        (project_id, current_user_id),
+    ).fetchall()
+
+
 def user_project_membership(user_id: int):
     db = get_db()
     return db.execute(
@@ -98,6 +113,19 @@ def parse_due_date(raw_due_date: str):
         return date.fromisoformat(raw_due_date).isoformat()
     except ValueError as exc:
         raise ValueError("Due date must be a valid calendar date.") from exc
+
+
+def parse_aht_minutes(raw_aht: str) -> int:
+    raw_aht = raw_aht.strip()
+    if not raw_aht:
+        return 0
+    try:
+        aht_minutes = int(raw_aht)
+    except ValueError as exc:
+        raise ValueError("AHT must be a whole number of minutes.") from exc
+    if aht_minutes < 0 or aht_minutes > MAX_AHT_MINUTES:
+        raise ValueError("AHT must be between 0 and 1440 minutes.")
+    return aht_minutes
 
 
 @app.route("/")
@@ -274,7 +302,14 @@ def project_detail(project_id):
     db = get_db()
     tasks = db.execute(
         """
-        SELECT t.*, assignee.name AS assignee_name, creator.name AS creator_name
+        SELECT t.*, assignee.name AS assignee_name, creator.name AS creator_name,
+            CASE
+                WHEN t.aht_minutes = 0
+                    OR strftime('%s', 'now') >= strftime('%s', t.created_at) + (t.aht_minutes * 60)
+                THEN 1
+                ELSE 0
+            END AS aht_ready,
+            datetime(t.created_at, '+' || t.aht_minutes || ' minutes') AS aht_available_at
         FROM tasks t
         LEFT JOIN users assignee ON assignee.id = t.assignee_id
         JOIN users creator ON creator.id = t.created_by
@@ -287,6 +322,7 @@ def project_detail(project_id):
         (project_id,),
     ).fetchall()
     members = project_members(project_id)
+    assignees = assignable_members(project_id, user["id"])
     today = date.today().isoformat()
 
     return render_template(
@@ -294,6 +330,7 @@ def project_detail(project_id):
         project=project,
         tasks=tasks,
         members=members,
+        assignees=assignees,
         roles=PROJECT_ROLES,
         statuses=TASK_STATUSES,
         priorities=TASK_PRIORITIES,
@@ -407,12 +444,13 @@ def create_task(project_id):
 
     title = request.form.get("title", "").strip()
     description = request.form.get("description", "").strip()
-    assignee_id = request.form.get("assignee_id", "").strip()
+    assignee_ids = [assignee_id.strip() for assignee_id in request.form.getlist("assignee_ids") if assignee_id.strip()]
     priority = request.form.get("priority", "Medium")
+    raw_aht_minutes = request.form.get("aht_minutes", "")
     raw_due_date = request.form.get("due_date", "")
 
-    if not title or not assignee_id:
-        flash("Task title and assignee are required.", "error")
+    if not title or not assignee_ids:
+        flash("Task title and at least one assignee are required.", "error")
         return redirect(url_for("project_detail", project_id=project_id))
     if len(title) > MAX_TITLE_LENGTH:
         flash("Task title must be 120 characters or less.", "error")
@@ -426,31 +464,46 @@ def create_task(project_id):
 
     try:
         due_date = parse_due_date(raw_due_date)
+        aht_minutes = parse_aht_minutes(raw_aht_minutes)
     except ValueError as exc:
         flash(str(exc), "error")
         return redirect(url_for("project_detail", project_id=project_id))
 
     db = get_db()
-    assignee = db.execute(
-        "SELECT 1 FROM project_members WHERE project_id = ? AND user_id = ?",
-        (project_id, assignee_id),
-    ).fetchone()
-    if assignee is None:
-        flash("Tasks can only be assigned to project members.", "error")
+    unique_assignee_ids = list(dict.fromkeys(assignee_ids))
+    placeholders = ",".join("?" for _ in unique_assignee_ids)
+    valid_assignees = db.execute(
+        f"""
+        SELECT user_id
+        FROM project_members
+        WHERE project_id = ? AND user_id != ? AND user_id IN ({placeholders})
+        """,
+        (project_id, user["id"], *unique_assignee_ids),
+    ).fetchall()
+    valid_assignee_ids = {str(assignee["user_id"]) for assignee in valid_assignees}
+    if len(valid_assignee_ids) != len(unique_assignee_ids):
+        flash("Tasks can only be assigned to other project members.", "error")
         return redirect(url_for("project_detail", project_id=project_id))
 
-    db.execute(
+    task_rows = [
+        (project_id, title, description, assignee_id, user["id"], "To Do", priority, aht_minutes, due_date)
+        for assignee_id in unique_assignee_ids
+    ]
+    db.executemany(
         """
         INSERT INTO tasks (
             project_id, title, description, assignee_id, created_by,
-            status, priority, due_date
+            status, priority, aht_minutes, due_date
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
-        (project_id, title, description, assignee_id, user["id"], "To Do", priority, due_date),
+        task_rows,
     )
     db.commit()
-    flash("Task created and assigned.", "success")
+    if len(task_rows) == 1:
+        flash("Task created and assigned.", "success")
+    else:
+        flash(f"Task created and assigned to {len(task_rows)} members.", "success")
     return redirect(url_for("project_detail", project_id=project_id))
 
 
@@ -481,6 +534,22 @@ def update_task_status(task_id):
     if task["assignee_id"] != user["id"] and task["current_user_role"] != "Admin":
         flash("Only the assignee or an admin can update this task.", "error")
         return redirect(url_for("project_detail", project_id=task["project_id"]))
+    if task["current_user_role"] != "Admin" and task["aht_minutes"] > 0:
+        aht_ready = db.execute(
+            """
+            SELECT CASE
+                WHEN strftime('%s', 'now') >= strftime('%s', created_at) + (aht_minutes * 60)
+                THEN 1
+                ELSE 0
+            END AS ready
+            FROM tasks
+            WHERE id = ?
+            """,
+            (task_id,),
+        ).fetchone()
+        if aht_ready is None or not aht_ready["ready"]:
+            flash("You can update this task only after its AHT time is completed.", "error")
+            return redirect(url_for("project_detail", project_id=task["project_id"]))
 
     db.execute("UPDATE tasks SET status = ? WHERE id = ?", (status, task_id))
     db.commit()

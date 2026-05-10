@@ -256,6 +256,11 @@ a {
     color: var(--danger);
 }
 
+.text-warning {
+    color: #b45309;
+    font-weight: 700;
+}
+
 .form-layout {
     margin-top: 18px;
 }
@@ -264,6 +269,13 @@ label span {
     display: block;
     margin-bottom: 7px;
     font-weight: 700;
+}
+
+.help-text {
+    display: block;
+    margin-top: 6px;
+    color: var(--muted);
+    font-size: 0.82rem;
 }
 
 input,
@@ -317,6 +329,12 @@ select:focus {
     background: #ff4fd8;
     border-color: #ff4fd8;
     color: #ffffff;
+}
+
+button:disabled,
+select:disabled {
+    cursor: not-allowed;
+    opacity: 0.62;
 }
 
 .switch-text {

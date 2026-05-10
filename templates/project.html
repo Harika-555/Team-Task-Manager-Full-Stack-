@@ -71,12 +71,13 @@
                 </label>
                 <div class="two-column">
                     <label>
-                        <span>Assignee</span>
-                        <select name="assignee_id" required>
-                            {% for member in members %}
+                        <span>Assignees</span>
+                        <select name="assignee_ids" multiple size="5" required>
+                            {% for member in assignees %}
                                 <option value="{{ member['id'] }}">{{ member["name"] }}</option>
                             {% endfor %}
                         </select>
+                        <small class="help-text">Hold Ctrl to select more than one member.</small>
                     </label>
                     <label>
                         <span>Priority</span>
@@ -89,7 +90,12 @@
                 </div>
                 <label>
                     <span>Due Date</span>
-                    <input type="date" name="due_date">
+                    <input type="date" name="due_date" required>
+                </label>
+                <label>
+                    <span>AHT Minutes</span>
+                    <input type="number" name="aht_minutes" min="0" max="1440" value="0" required>
+                    <small class="help-text">Members can update status only after this time passes.</small>
                 </label>
                 <button type="submit" class="primary-btn">Create Task</button>
             </form>
@@ -121,19 +127,23 @@
                                 {% endif %}
                                 <div class="task-meta">
                                     <span>Assigned to {{ task["assignee_name"] or "Unassigned" }}</span>
+                                    <span>AHT {{ task["aht_minutes"] }} minutes</span>
                                     {% if task["due_date"] %}
                                         <span class="{% if task['due_date'] < today and task['status'] != 'Done' %}text-danger{% endif %}">
                                             Due {{ task["due_date"] }}
                                         </span>
                                     {% endif %}
+                                    {% if project["current_user_role"] != "Admin" and not task["aht_ready"] %}
+                                        <span class="text-warning">Update available after {{ task["aht_available_at"] }}</span>
+                                    {% endif %}
                                 </div>
                                 <form action="{{ url_for('update_task_status', task_id=task['id']) }}" method="post" class="inline-form">
-                                    <select name="status">
+                                    <select name="status" {% if project["current_user_role"] != "Admin" and not task["aht_ready"] %}disabled{% endif %}>
                                         {% for option in statuses %}
                                             <option value="{{ option }}" {% if option == task["status"] %}selected{% endif %}>{{ option }}</option>
                                         {% endfor %}
                                     </select>
-                                    <button type="submit" class="secondary-btn">Update</button>
+                                    <button type="submit" class="secondary-btn" {% if project["current_user_role"] != "Admin" and not task["aht_ready"] %}disabled{% endif %}>Update</button>
                                 </form>
                             </article>
                         {% endif %}

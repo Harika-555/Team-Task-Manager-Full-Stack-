@@ -300,6 +300,12 @@ def project_detail(project_id):
         return redirect(url_for("dashboard"))
 
     db = get_db()
+    task_filters = ["t.project_id = ?"]
+    task_params = [project_id]
+    if project["current_user_role"] != "Admin":
+        task_filters.append("t.assignee_id = ?")
+        task_params.append(user["id"])
+
     tasks = db.execute(
         """
         SELECT t.*, assignee.name AS assignee_name, creator.name AS creator_name,
@@ -313,13 +319,13 @@ def project_detail(project_id):
         FROM tasks t
         LEFT JOIN users assignee ON assignee.id = t.assignee_id
         JOIN users creator ON creator.id = t.created_by
-        WHERE t.project_id = ?
+        WHERE """ + " AND ".join(task_filters) + """
         ORDER BY
             CASE t.status WHEN 'To Do' THEN 1 WHEN 'In Progress' THEN 2 ELSE 3 END,
             CASE WHEN t.due_date IS NULL THEN 1 ELSE 0 END,
             t.due_date ASC
         """,
-        (project_id,),
+        task_params,
     ).fetchall()
     members = project_members(project_id)
     assignees = assignable_members(project_id, user["id"])

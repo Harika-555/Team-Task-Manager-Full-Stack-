@@ -152,7 +152,11 @@
             {% endfor %}
         </div>
     {% else %}
-        <p class="empty-state">No tasks created yet.</p>
+        {% if project["current_user_role"] == "Admin" %}
+            <p class="empty-state">No tasks created yet.</p>
+        {% else %}
+            <p class="empty-state">No tasks assigned to you yet.</p>
+        {% endif %}
     {% endif %}
 </section>
 {% endblock %}

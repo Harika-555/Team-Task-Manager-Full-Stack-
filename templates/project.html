@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+{% block title %}{{ project["name"] }} | Team Task Manager{% endblock %}
+{% block content %}
+<section class="page-header split-header">
+    <div>
+        <p class="eyebrow">Project</p>
+        <h1>{{ project["name"] }}</h1>
+        <p>{{ project["description"] or "No description added." }}</p>
+    </div>
+    <div class="role-box">
+        <span>Your Role</span>
+        <strong>{{ project["current_user_role"] }}</strong>
+    </div>
+</section>
+
+<section class="dashboard-grid">
+    <div class="panel">
+        <div class="panel-heading">
+            <div>
+                <p class="eyebrow">Team</p>
+                <h2>Members</h2>
+            </div>
+        </div>
+        <div class="member-list">
+            {% for member in members %}
+                <div class="member-row">
+                    <div>
+                        <strong>{{ member["name"] }}</strong>
+                        <span>{{ member["email"] }}</span>
+                    </div>
+                    <span class="tag">{{ member["role"] }}</span>
+                </div>
+            {% endfor %}
+        </div>
+
+        {% if project["current_user_role"] == "Admin" %}
+            <form action="{{ url_for('add_member', project_id=project['id']) }}" method="post" class="form-layout add-form">
+                <label>
+                    <span>Member Email</span>
+                    <input type="email" name="email" placeholder="teammate@example.com" required>
+                </label>
+                <label>
+                    <span>Role</span>
+                    <select name="role">
+                        {% for role in roles %}
+                            <option value="{{ role }}">{{ role }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+                <button type="submit" class="secondary-btn">Add Member</button>
+            </form>
+        {% endif %}
+    </div>
+
+    {% if project["current_user_role"] == "Admin" %}
+        <div class="panel">
+            <div class="panel-heading">
+                <div>
+                    <p class="eyebrow">Assign</p>
+                    <h2>New Task</h2>
+                </div>
+            </div>
+            <form action="{{ url_for('create_task', project_id=project['id']) }}" method="post" class="form-layout">
+                <label>
+                    <span>Task Title</span>
+                    <input type="text" name="title" placeholder="Prepare API routes" required>
+                </label>
+                <label>
+                    <span>Description</span>
+                    <textarea name="description" rows="3" placeholder="Task details"></textarea>
+                </label>
+                <div class="two-column">
+                    <label>
+                        <span>Assignee</span>
+                        <select name="assignee_id" required>
+                            {% for member in members %}
+                                <option value="{{ member['id'] }}">{{ member["name"] }}</option>
+                            {% endfor %}
+                        </select>
+                    </label>
+                    <label>
+                        <span>Priority</span>
+                        <select name="priority">
+                            {% for priority in priorities %}
+                                <option value="{{ priority }}">{{ priority }}</option>
+                            {% endfor %}
+                        </select>
+                    </label>
+                </div>
+                <label>
+                    <span>Due Date</span>
+                    <input type="date" name="due_date">
+                </label>
+                <button type="submit" class="primary-btn">Create Task</button>
+            </form>
+        </div>
+    {% endif %}
+</section>
+
+<section class="panel">
+    <div class="panel-heading">
+        <div>
+            <p class="eyebrow">Tasks</p>
+            <h2>Status Tracking</h2>
+        </div>
+    </div>
+    {% if tasks %}
+        <div class="task-board">
+            {% for status in statuses %}
+                <div class="status-column">
+                    <h3>{{ status }}</h3>
+                    {% for task in tasks %}
+                        {% if task["status"] == status %}
+                            <article class="task-item">
+                                <div class="task-topline">
+                                    <h4>{{ task["title"] }}</h4>
+                                    <span class="tag">{{ task["priority"] }}</span>
+                                </div>
+                                {% if task["description"] %}
+                                    <p>{{ task["description"] }}</p>
+                                {% endif %}
+                                <div class="task-meta">
+                                    <span>Assigned to {{ task["assignee_name"] or "Unassigned" }}</span>
+                                    {% if task["due_date"] %}
+                                        <span class="{% if task['due_date'] < today and task['status'] != 'Done' %}text-danger{% endif %}">
+                                            Due {{ task["due_date"] }}
+                                        </span>
+                                    {% endif %}
+                                </div>
+                                <form action="{{ url_for('update_task_status', task_id=task['id']) }}" method="post" class="inline-form">
+                                    <select name="status">
+                                        {% for option in statuses %}
+                                            <option value="{{ option }}" {% if option == task["status"] %}selected{% endif %}>{{ option }}</option>
+                                        {% endfor %}
+                                    </select>
+                                    <button type="submit" class="secondary-btn">Update</button>
+                                </form>
+                            </article>
+                        {% endif %}
+                    {% endfor %}
+                </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <p class="empty-state">No tasks created yet.</p>
+    {% endif %}
+</section>
+{% endblock %}

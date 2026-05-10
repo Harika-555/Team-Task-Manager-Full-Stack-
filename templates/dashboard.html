@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% block title %}Dashboard | Team Task Manager{% endblock %}
+{% block content %}
+<section class="page-header">
+    <div>
+        <h1>Hello, {{ user["name"] }}</h1>
+        <p>Track projects, assigned tasks, active work, and overdue deadlines.</p>
+    </div>
+</section>
+
+<section class="metrics-grid">
+    <div class="metric-card">
+        <span>Projects</span>
+        <strong>{{ metrics.projects }}</strong>
+    </div>
+    <div class="metric-card">
+        <span>Assigned Tasks</span>
+        <strong>{{ metrics.assigned }}</strong>
+    </div>
+    <div class="metric-card">
+        <span>In Progress</span>
+        <strong>{{ metrics.in_progress }}</strong>
+    </div>
+    <div class="metric-card danger">
+        <span>Overdue</span>
+        <strong>{{ metrics.overdue }}</strong>
+    </div>
+</section>
+
+<section class="dashboard-grid">
+    <div class="panel">
+        <div class="panel-heading">
+            <div>
+                <p class="eyebrow">Create</p>
+                <h2>New Project</h2>
+            </div>
+        </div>
+        <form action="{{ url_for('create_project') }}" method="post" class="form-layout">
+            <label>
+                <span>Project Name</span>
+                <input type="text" name="name" placeholder="Enter the name of the Project" required>
+            </label>
+            <label>
+                <span>Description</span>
+                <textarea name="description" rows="4" placeholder="Short project summary"></textarea>
+            </label>
+            <button type="submit" class="primary-btn">Create Project</button>
+        </form>
+    </div>
+
+    <div class="panel">
+        <div class="panel-heading">
+            <div>
+                <p class="eyebrow">Your Work</p>
+                <h2>Assigned Tasks</h2>
+            </div>
+        </div>
+        {% if assigned_tasks %}
+            <div class="task-list compact-list">
+                {% for task in assigned_tasks %}
+                    <article class="task-item">
+                        <div>
+                            <h3>{{ task["title"] }}</h3>
+                            <p>{{ task["project_name"] }}</p>
+                            <div class="tag-row">
+                                <span class="tag">{{ task["status"] }}</span>
+                                <span class="tag">{{ task["priority"] }}</span>
+                                {% if task["due_date"] %}
+                                    <span class="tag {% if task['due_date'] < today and task['status'] != 'Done' %}danger-tag{% endif %}">
+                                        Due {{ task["due_date"] }}
+                                    </span>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </article>
+                {% endfor %}
+            </div>
+        {% else %}
+            <p class="empty-state">No tasks assigned yet.</p>
+        {% endif %}
+    </div>
+</section>
+
+<section class="panel">
+    <div class="panel-heading">
+        <div>
+            <p class="eyebrow">Projects</p>
+            <h2>Your Project List</h2>
+        </div>
+    </div>
+    {% if projects %}
+        <div class="project-grid">
+            {% for project in projects %}
+                <a class="project-card" href="{{ url_for('project_detail', project_id=project['id']) }}">
+                    <div>
+                        <h3>{{ project["name"] }}</h3>
+                        <p>{{ project["description"] or "No description added." }}</p>
+                    </div>
+                    <div class="project-meta">
+                        <span>{{ project["current_user_role"] }}</span>
+                        <span>{{ project["done_count"] or 0 }}/{{ project["task_count"] }} done</span>
+                    </div>
+                </a>
+            {% endfor %}
+        </div>
+    {% else %}
+        <p class="empty-state">Create your first project to start adding team members and tasks.</p>
+    {% endif %}
+</section>
+{% endblock %}

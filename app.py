@@ -45,7 +45,11 @@ def get_current_user():
     if not user_id:
         return None
     db = get_db()
-    return db.execute("SELECT id, name, email FROM users WHERE id = ?", (user_id,)).fetchone()
+    user = db.execute("SELECT id, name, email FROM users WHERE id = ?", (user_id,)).fetchone()
+    if user is None:
+        session.clear()
+        return None
+    return user
 
 
 def login_required_user():
@@ -140,7 +144,7 @@ def parse_aht_minutes(raw_aht: str) -> int:
 
 @app.route("/")
 def index():
-    if session.get("user_id"):
+    if get_current_user():
         return redirect(url_for("dashboard"))
     return redirect(url_for("register"))
 
@@ -152,7 +156,7 @@ def health():
 
 @app.route("/register", methods=["GET", "POST"])
 def register():
-    if session.get("user_id"):
+    if get_current_user():
         return redirect(url_for("dashboard"))
 
     if request.method == "POST":
@@ -184,7 +188,7 @@ def register():
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
-    if session.get("user_id"):
+    if get_current_user():
         return redirect(url_for("dashboard"))
 
     if request.method == "POST":
@@ -211,6 +215,7 @@ def dashboard():
         return redirect(url_for("login"))
 
     db = get_db()
+    today = date.today().isoformat()
     projects = db.execute(
         """
         SELECT p.*, pm.role AS current_user_role,
@@ -231,14 +236,14 @@ def dashboard():
         FROM tasks t
         JOIN projects p ON p.id = t.project_id
         WHERE t.assignee_id = ?
+            AND (t.due_date IS NULL OR t.due_date >= ?)
         ORDER BY
             CASE WHEN t.due_date IS NULL THEN 1 ELSE 0 END,
             t.due_date ASC,
             t.created_at DESC
         """,
-        (user["id"],),
+        (user["id"], today),
     ).fetchall()
-    today = date.today().isoformat()
     metrics = {
         "projects": len(projects),
         "assigned": len(assigned_tasks),
@@ -315,6 +320,8 @@ def project_detail(project_id):
     if project["current_user_role"] != "Admin":
         task_filters.append("t.assignee_id = ?")
         task_params.append(user["id"])
+        task_filters.append("(t.due_date IS NULL OR t.due_date >= ?)")
+        task_params.append(date.today().isoformat())
 
     tasks = db.execute(
         """

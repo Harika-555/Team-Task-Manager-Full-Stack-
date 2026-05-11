@@ -67,7 +67,7 @@
                                 <span class="tag">{{ task["priority"] }}</span>
                                 {% if task["due_date"] %}
                                     <span class="tag {% if task['due_date'] < today and task['status'] != 'Done' %}danger-tag{% endif %}">
-                                        Due {{ task["due_date"] }}
+                                        Due {{ task["due_date"]|display_date }}
                                     </span>
                                 {% endif %}
                             </div>

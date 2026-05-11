@@ -1,6 +1,6 @@
 import os
 import sqlite3
-from datetime import date
+from datetime import date, datetime
 
 from flask import Flask, flash, jsonify, redirect, render_template, request, session, url_for
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -20,6 +20,16 @@ MAX_NAME_LENGTH = 80
 MAX_TITLE_LENGTH = 120
 MAX_DESCRIPTION_LENGTH = 500
 MAX_AHT_MINUTES = 1440
+
+
+@app.template_filter("display_date")
+def display_date(value: str) -> str:
+    if not value:
+        return ""
+    try:
+        return date.fromisoformat(value).strftime("%d %b %Y")
+    except ValueError:
+        return value
 
 
 def create_database_if_needed() -> None:
@@ -311,11 +321,12 @@ def project_detail(project_id):
         SELECT t.*, assignee.name AS assignee_name, creator.name AS creator_name,
             CASE
                 WHEN t.aht_minutes = 0
-                    OR strftime('%s', 'now') >= strftime('%s', t.created_at) + (t.aht_minutes * 60)
-                THEN 1
-                ELSE 0
-            END AS aht_ready,
-            datetime(t.created_at, '+' || t.aht_minutes || ' minutes') AS aht_available_at
+                        OR t.started_at IS NULL
+                        OR strftime('%s', 'now') >= strftime('%s', t.started_at) + (t.aht_minutes * 60)
+                    THEN 1
+                    ELSE 0
+                END AS aht_ready,
+                datetime(t.started_at, '+' || t.aht_minutes || ' minutes') AS aht_available_at
         FROM tasks t
         LEFT JOIN users assignee ON assignee.id = t.assignee_id
         JOIN users creator ON creator.id = t.created_by
@@ -544,7 +555,8 @@ def update_task_status(task_id):
         aht_ready = db.execute(
             """
             SELECT CASE
-                WHEN strftime('%s', 'now') >= strftime('%s', created_at) + (aht_minutes * 60)
+                WHEN started_at IS NOT NULL
+                AND strftime('%s', 'now') >= strftime('%s', started_at) + (aht_minutes * 60)
                 THEN 1
                 ELSE 0
             END AS ready
@@ -557,12 +569,66 @@ def update_task_status(task_id):
             flash("You can update this task only after its AHT time is completed.", "error")
             return redirect(url_for("project_detail", project_id=task["project_id"]))
 
-    db.execute("UPDATE tasks SET status = ? WHERE id = ?", (status, task_id))
+    submitted_description = request.form.get("submitted_description", "").strip()
+    if task["current_user_role"] != "Admin" and not submitted_description:
+        flash("Please enter a work description before submitting the task.", "error")
+        return redirect(url_for("project_detail", project_id=task["project_id"]))
+
+    if task["current_user_role"] == "Admin":
+        db.execute("UPDATE tasks SET status = ? WHERE id = ?", (status, task_id))
+    else:
+        db.execute(
+            """
+            UPDATE tasks
+            SET status = ?, submitted_description = ?
+            WHERE id = ?
+            """,
+            (status, submitted_description, task_id),
+        )
     db.commit()
     flash("Task status updated.", "success")
     return redirect(url_for("project_detail", project_id=task["project_id"]))
 
+@app.route("/tasks/<int:task_id>/start", methods=["POST"])
+def start_task(task_id):
+    user = login_required_user()
+    if user is None:
+        return redirect(url_for("login"))
 
+    db = get_db()
+
+    task = db.execute(
+        """
+        SELECT *
+        FROM tasks
+        WHERE id = ?
+        """,
+        (task_id,),
+    ).fetchone()
+
+    if task is None:
+        flash("Task not found.", "error")
+        return redirect(url_for("dashboard"))
+
+    # Only assigned member can start
+    if task["assignee_id"] != user["id"]:
+        flash("Only assigned member can start this task.", "error")
+        return redirect(url_for("project_detail", project_id=task["project_id"]))
+
+    # Start timer only once
+    if task["started_at"] is None:
+        db.execute(
+            """
+            UPDATE tasks
+            SET started_at = ?, status = 'In Progress'
+            WHERE id = ?
+            """,
+            (datetime.utcnow().isoformat(sep=" ", timespec="seconds"), task_id),
+        )
+        db.commit()
+
+    flash("Task started successfully.", "success")
+    return redirect(url_for("project_detail", project_id=task["project_id"]))
 @app.route("/logout")
 def logout():
     session.clear()

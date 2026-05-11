@@ -125,26 +125,83 @@
                                 {% if task["description"] %}
                                     <p>{{ task["description"] }}</p>
                                 {% endif %}
+                                {% if task["submitted_description"] %}
+                                    <p><strong>Submitted work:</strong> {{ task["submitted_description"] }}</p>
+                                {% endif %}
                                 <div class="task-meta">
                                     <span>Assigned to {{ task["assignee_name"] or "Unassigned" }}</span>
                                     <span>AHT {{ task["aht_minutes"] }} minutes</span>
                                     {% if task["due_date"] %}
                                         <span class="{% if task['due_date'] < today and task['status'] != 'Done' %}text-danger{% endif %}">
-                                            Due {{ task["due_date"] }}
+                                            Due {{ task["due_date"]|display_date }}
                                         </span>
                                     {% endif %}
                                     {% if project["current_user_role"] != "Admin" and not task["aht_ready"] %}
-                                        <span class="text-warning">Update available after {{ task["aht_available_at"] }}</span>
+                                        <span class="text-warning">AHT timer is running</span>
                                     {% endif %}
                                 </div>
-                                <form action="{{ url_for('update_task_status', task_id=task['id']) }}" method="post" class="inline-form">
-                                    <select name="status" {% if project["current_user_role"] != "Admin" and not task["aht_ready"] %}disabled{% endif %}>
-                                        {% for option in statuses %}
-                                            <option value="{{ option }}" {% if option == task["status"] %}selected{% endif %}>{{ option }}</option>
-                                        {% endfor %}
-                                    </select>
-                                    <button type="submit" class="secondary-btn" {% if project["current_user_role"] != "Admin" and not task["aht_ready"] %}disabled{% endif %}>Update</button>
-                                </form>
+                                {% if project["current_user_role"] == "Admin" %}
+
+    <form action="{{ url_for('update_task_status', task_id=task['id']) }}" method="post" class="inline-form">
+        <select name="status">
+            {% for option in statuses %}
+                <option value="{{ option }}" {% if option == task["status"] %}selected{% endif %}>
+                    {{ option }}
+                </option>
+            {% endfor %}
+        </select>
+        <button type="submit" class="secondary-btn">Update</button>
+    </form>
+
+{% else %}
+
+    {% if task["started_at"] is none %}
+        <form action="{{ url_for('start_task', task_id=task['id']) }}" method="post">
+            <button type="submit" class="primary-btn">
+                Start Task
+            </button>
+        </form>
+
+    {% else %}
+
+        {% if task["status"] != "Done" %}
+            <details class="task-submit-panel">
+                <summary>Open task submission</summary>
+                <form action="{{ url_for('update_task_status', task_id=task['id']) }}" method="post" class="form-layout">
+                    <label>
+                        <span>Work Description</span>
+                        <textarea
+                            name="submitted_description"
+                            rows="4"
+                            placeholder="Enter the prompt, response notes, or work completed for this assigned task..."
+                            required></textarea>
+                    </label>
+
+                    {% if not task["aht_ready"] %}
+                        <p class="text-warning">
+                            Submit button enables in
+                            <strong
+                                class="countdown-timer"
+                                data-ready-at="{{ task['aht_available_at'] }}"
+                                data-task-id="{{ task['id'] }}">00:00:00</strong>
+                        </p>
+                    {% endif %}
+
+                    <input type="hidden" name="status" value="Done">
+
+                    <button
+                        type="submit"
+                        class="primary-btn"
+                        {% if not task["aht_ready"] %}disabled{% endif %}>
+                        Submit Task
+                    </button>
+                </form>
+            </details>
+        {% endif %}
+
+    {% endif %}
+
+{% endif %}
                             </article>
                         {% endif %}
                     {% endfor %}
@@ -159,4 +216,48 @@
         {% endif %}
     {% endif %}
 </section>
+<script>
+    function parseReadyAt(value) {
+        if (!value) {
+            return null;
+        }
+        return new Date(value.replace(" ", "T") + "Z");
+    }
+
+    function formatDuration(seconds) {
+        const safeSeconds = Math.max(0, seconds);
+        const hours = Math.floor(safeSeconds / 3600);
+        const minutes = Math.floor((safeSeconds % 3600) / 60);
+        const remainingSeconds = safeSeconds % 60;
+        return [hours, minutes, remainingSeconds]
+            .map((part) => String(part).padStart(2, "0"))
+            .join(":");
+    }
+
+    function updateCountdowns() {
+        document.querySelectorAll(".countdown-timer").forEach((timer) => {
+            const readyAt = parseReadyAt(timer.dataset.readyAt);
+            if (!readyAt) {
+                return;
+            }
+            const secondsLeft = Math.ceil((readyAt.getTime() - Date.now()) / 1000);
+            timer.textContent = formatDuration(secondsLeft);
+            if (secondsLeft <= 0) {
+                const form = timer.closest("form");
+                if (form) {
+                    form.querySelectorAll("button:disabled").forEach((button) => {
+                        button.disabled = false;
+                    });
+                }
+                const message = timer.closest(".text-warning");
+                if (message) {
+                    message.textContent = "Submit button is enabled now.";
+                }
+            }
+        });
+    }
+
+    updateCountdowns();
+    setInterval(updateCountdowns, 1000);
+</script>
 {% endblock %}

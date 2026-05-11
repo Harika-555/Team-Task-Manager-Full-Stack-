@@ -492,6 +492,20 @@ select:disabled {
     min-width: 130px;
 }
 
+.task-submit-panel {
+    margin-top: 12px;
+}
+
+.task-submit-panel summary {
+    cursor: pointer;
+    color: var(--brand-dark);
+    font-weight: 800;
+}
+
+.task-submit-panel .form-layout {
+    margin-top: 12px;
+}
+
 .empty-state {
     margin: 0;
     padding: 16px;

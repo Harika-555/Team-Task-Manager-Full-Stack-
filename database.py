@@ -64,6 +64,8 @@ def init_db() -> None:
             status TEXT NOT NULL CHECK(status IN ('To Do', 'In Progress', 'Done')),
             priority TEXT NOT NULL CHECK(priority IN ('Low', 'Medium', 'High')),
             aht_minutes INTEGER NOT NULL DEFAULT 0,
+            started_at TIMESTAMP,
+            submitted_description TEXT,
             due_date TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
@@ -73,6 +75,8 @@ def init_db() -> None:
         """
     )
     ensure_column(db, "tasks", "aht_minutes", "INTEGER NOT NULL DEFAULT 0")
+    ensure_column(db, "tasks", "started_at", "TIMESTAMP")
+    ensure_column(db, "tasks", "submitted_description", "TEXT")
     db.commit()
 
 

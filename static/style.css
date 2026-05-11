@@ -506,6 +506,18 @@ select:disabled {
     margin-top: 12px;
 }
 
+.timer-line {
+    color: var(--muted);
+    font-weight: 700;
+    margin: 0;
+}
+
+.timer-line strong,
+.countdown-timer {
+    color: var(--ink);
+    font-variant-numeric: tabular-nums;
+}
+
 .empty-state {
     margin: 0;
     padding: 16px;

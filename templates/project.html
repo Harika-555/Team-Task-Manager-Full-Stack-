@@ -168,6 +168,12 @@
             <details class="task-submit-panel">
                 <summary>Open task submission</summary>
                 <form action="{{ url_for('update_task_status', task_id=task['id']) }}" method="post" class="form-layout">
+                    <p class="timer-line">
+                        Elapsed time
+                        <strong
+                            class="elapsed-timer"
+                            data-started-at="{{ task['started_at'] }}">00:00:00</strong>
+                    </p>
                     <label>
                         <span>Work Description</span>
                         <textarea
@@ -217,7 +223,7 @@
     {% endif %}
 </section>
 <script>
-    function parseReadyAt(value) {
+    function parseUtcDate(value) {
         if (!value) {
             return null;
         }
@@ -236,7 +242,7 @@
 
     function updateCountdowns() {
         document.querySelectorAll(".countdown-timer").forEach((timer) => {
-            const readyAt = parseReadyAt(timer.dataset.readyAt);
+            const readyAt = parseUtcDate(timer.dataset.readyAt);
             if (!readyAt) {
                 return;
             }
@@ -257,7 +263,22 @@
         });
     }
 
+    function updateElapsedTimers() {
+        document.querySelectorAll(".elapsed-timer").forEach((timer) => {
+            const startedAt = parseUtcDate(timer.dataset.startedAt);
+            if (!startedAt) {
+                return;
+            }
+            const elapsedSeconds = Math.floor((Date.now() - startedAt.getTime()) / 1000);
+            timer.textContent = formatDuration(elapsedSeconds);
+        });
+    }
+
     updateCountdowns();
-    setInterval(updateCountdowns, 1000);
+    updateElapsedTimers();
+    setInterval(() => {
+        updateCountdowns();
+        updateElapsedTimers();
+    }, 1000);
 </script>
 {% endblock %}
